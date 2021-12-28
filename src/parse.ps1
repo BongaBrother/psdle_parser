@@ -1,23 +1,65 @@
-# Purpose: Requires PSDLE file with Platform, Name, and Store
+# Purpose: Requires PSDLE file with Platform, Name, Size (NOT prettySize) Store (url)
 # Usage: .\parse.ps1 -file .\psdle_ps4.csv
 
 
 ## PRODUCTID also works instead of Store
 param(
-    [Parameter(Position=0,Mandatory=1)] [string]$file
+    [Parameter(Position=0,Mandatory=1)] [string]$psdleJsonFile,
+    [Parameter(Position=1,Mandatory=0)] [string]$jsonFile
 )
 
-$inputFile = New-Object System.IO.FileInfo($file)
+function Parse-PsdleJson($file)
+{
+    if (-Not($file))
+    {
+        throw "psdle json file required"
+    }
 
-if ($inputFile.Extension -eq ".csv")
-{
-    $games = (Get-Content $file -Encoding UTF8) | ConvertFrom-Csv | Sort-Object -Property "Name", "Store", "Size"
-    $games | % { $_.Size = [int64]$_.Size }
-    $games = $games | Select-Object -Property Platform, Name, Store, Size, @{ label="Id"; expression={(($_.Store -split "/")[-1] -split "-")[1]} }
+    $allGames = ((Get-Content $file -Encoding UTF8) | ConvertFrom-Json).items | Sort-Object -Property "platform", "name"
+    $allGames = $allGames | Select-Object -Property platform, name, @{ label="Id"; expression={(($_.id -split "/")[-1] -split "-")[1]} }
+ 
+    $i = 1;
+    $games = @()
+    foreach($game in $allGames)
+    {
+        $games += [PSCustomObject]@{
+            Index = $i++
+            Platform = $game.Platform
+            Name = $game.Name
+            IsBase = $false
+            Id = $game.Id
+        }
+    }
+    
+    return $games
 }
-elseif ($inputFile.Extension -eq ".json")
+
+function Parse-CurrentJson($file)
 {
+    if (-Not($file))
+    {
+        return @();
+    }
     $games = (Get-Content $file -Encoding UTF8) | ConvertFrom-Json | Sort-Object -Property "Name", "Store", "Size"
+    return $games;
+}
+
+
+function Sync
+$sourceGames = Parse-PsdleJson($psdleJsonFile);
+$existingGames = Parse-Json($jsonFile);
+
+foreach($sourceGame in $sourceGames)
+{
+    $baseGame = $existingGames | Where-Object { $_.Id -eq $sourceGame.Id -and $_.IsBase -eq $true }
+    $baseGameExists = (-not(-not($baseGame))
+    
+    
+}
+
+if ($jsonFile)
+{
+    $games = (Get-Content $jsonFile -Encoding UTF8) | ConvertFrom-Json | Sort-Object -Property "Name", "Store", "Size"
 }
 
 $grouped = $games | Group-Object "Id" -AsHashTable -AsString
